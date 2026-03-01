@@ -62,6 +62,8 @@ function initializeTabNavigation() {
                 loadApplications();
             } else if (targetTab === 'analytics') {
                 loadAnalytics();
+            } else if (targetTab === 'job-finder') {
+                loadJobPostings();
             }
         });
     });
@@ -89,6 +91,17 @@ function initializeEventListeners() {
     // Filters
     document.getElementById('statusFilter').addEventListener('change', loadApplications);
     document.getElementById('companyFilter').addEventListener('input', debounce(loadApplications, 500));
+
+    // Job Finder
+    document.getElementById('searchJobsBtn').addEventListener('click', searchJobs);
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            loadJobPostings(btn.getAttribute('data-filter'));
+        });
+    });
 
     // Close modal on background click
     document.getElementById('applicationModal').addEventListener('click', (e) => {
@@ -476,6 +489,185 @@ async function loadAnalytics() {
             `).join('') || '<p class="empty-state">No data</p>';
     } catch (error) {
         console.error('Error loading analytics:', error);
+    }
+}
+
+// Job Finder
+let jobPostings = [];
+
+async function searchJobs() {
+    const searchBtn = document.getElementById('searchJobsBtn');
+    const statusDiv = document.getElementById('searchStatus');
+
+    // Get selected companies
+    const selectedCompanies = Array.from(
+        document.querySelectorAll('input[name="company"]:checked')
+    ).map(cb => cb.value);
+
+    if (selectedCompanies.length === 0) {
+        showNotification('Please select at least one company', 'error');
+        return;
+    }
+
+    // Get keywords
+    const keywords = document.getElementById('searchKeywords').value
+        .split(',')
+        .map(k => k.trim())
+        .filter(k => k);
+
+    // Show loading state
+    searchBtn.disabled = true;
+    searchBtn.textContent = '🔄 Searching...';
+    statusDiv.style.display = 'block';
+    statusDiv.className = 'search-status loading';
+    statusDiv.textContent = 'Searching for jobs...';
+
+    try {
+        const response = await fetch(`${API_BASE}/job-search/search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                companies: selectedCompanies,
+                keywords: keywords
+            })
+        });
+
+        const data = await response.json();
+
+        statusDiv.className = 'search-status success';
+        statusDiv.textContent = `✓ ${data.message}`;
+
+        // Load the results
+        await loadJobPostings();
+
+        setTimeout(() => {
+            statusDiv.style.display = 'none';
+        }, 3000);
+
+    } catch (error) {
+        console.error('Error searching jobs:', error);
+        statusDiv.className = 'search-status error';
+        statusDiv.textContent = '❌ Error searching for jobs. Please try again.';
+    } finally {
+        searchBtn.disabled = false;
+        searchBtn.textContent = '🔍 Search Jobs';
+    }
+}
+
+async function loadJobPostings(filter = 'all') {
+    try {
+        let url = `${API_BASE}/job-search/postings?`;
+
+        if (filter === 'saved') {
+            url += 'is_saved=true';
+        } else if (filter === 'applied') {
+            url += 'is_applied=true';
+        }
+
+        const response = await fetch(url);
+        jobPostings = await response.json();
+
+        renderJobPostings();
+    } catch (error) {
+        console.error('Error loading job postings:', error);
+    }
+}
+
+function renderJobPostings() {
+    const container = document.getElementById('jobPostingsList');
+
+    if (jobPostings.length === 0) {
+        container.innerHTML = '<p class="empty-state">No job postings found. Click "Search Jobs" to find opportunities!</p>';
+        return;
+    }
+
+    container.innerHTML = jobPostings.map(job => `
+        <div class="job-posting-item">
+            <div class="job-header">
+                <div>
+                    <div class="job-title">${job.position_title}</div>
+                    <div class="job-company">${job.company_name}</div>
+                </div>
+                <div class="job-badges">
+                    ${job.is_saved ? '<span class="badge badge-saved">⭐ Saved</span>' : ''}
+                    ${job.is_applied ? '<span class="badge badge-applied">✓ Applied</span>' : ''}
+                </div>
+            </div>
+
+            <div class="job-details">
+                ${job.location ? `📍 ${job.location}<br>` : ''}
+                ${job.salary_range ? `💰 ${job.salary_range}<br>` : ''}
+                ${job.job_type ? `⏰ ${job.job_type}<br>` : ''}
+                ${job.source ? `🔗 ${job.source}` : ''}
+            </div>
+
+            ${job.description ? `<div class="job-description">${job.description}</div>` : ''}
+
+            ${job.tags && job.tags.length > 0 ? `
+                <div class="job-tags">
+                    ${job.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                </div>
+            ` : ''}
+
+            <div class="job-actions">
+                <button class="save-btn ${job.is_saved ? 'saved' : ''}"
+                        onclick="toggleSaveJob(${job.id}, ${!job.is_saved})">
+                    ${job.is_saved ? '⭐ Saved' : '☆ Save'}
+                </button>
+                <button class="apply-btn"
+                        onclick="markAsApplied(${job.id})">
+                    ${job.is_applied ? '✓ Applied' : 'Mark as Applied'}
+                </button>
+                ${job.job_url ? `<button class="view-btn" onclick="window.open('${job.job_url}', '_blank')">🔗 View Job</button>` : ''}
+                <button class="delete-btn" onclick="deleteJobPosting(${job.id})">🗑️ Delete</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function toggleSaveJob(jobId, save) {
+    try {
+        await fetch(`${API_BASE}/job-search/postings/${jobId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_saved: save })
+        });
+
+        await loadJobPostings();
+    } catch (error) {
+        console.error('Error toggling save:', error);
+    }
+}
+
+async function markAsApplied(jobId) {
+    if (!confirm('Mark this job as applied?')) return;
+
+    try {
+        await fetch(`${API_BASE}/job-search/postings/${jobId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_applied: true })
+        });
+
+        await loadJobPostings();
+        showNotification('Job marked as applied!');
+    } catch (error) {
+        console.error('Error marking as applied:', error);
+    }
+}
+
+async function deleteJobPosting(jobId) {
+    if (!confirm('Delete this job posting?')) return;
+
+    try {
+        await fetch(`${API_BASE}/job-search/postings/${jobId}`, {
+            method: 'DELETE'
+        });
+
+        await loadJobPostings();
+        showNotification('Job posting deleted');
+    } catch (error) {
+        console.error('Error deleting job posting:', error);
     }
 }
 

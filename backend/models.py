@@ -101,3 +101,45 @@ class DailyGoal(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class JobPosting(Base):
+    """Job posting model for found jobs."""
+
+    __tablename__ = "job_postings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_name = Column(String(200), nullable=False, index=True)
+    position_title = Column(String(200), nullable=False)
+    job_url = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    location = Column(String(200), nullable=True)
+    salary_range = Column(String(100), nullable=True)
+    job_type = Column(String(50), nullable=True)  # full-time, contract, etc.
+    posted_date = Column(DateTime, nullable=True)
+    source = Column(String(100), nullable=True)  # careers page, LinkedIn, etc.
+    is_saved = Column(Boolean, default=False)
+    is_applied = Column(Boolean, default=False)
+    tags = Column(Text, nullable=True)  # Comma-separated tags
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "company_name": self.company_name,
+            "position_title": self.position_title,
+            "job_url": self.job_url,
+            "description": self.description,
+            "location": self.location,
+            "salary_range": self.salary_range,
+            "job_type": self.job_type,
+            "posted_date": self.posted_date.isoformat() if self.posted_date else None,
+            "source": self.source,
+            "is_saved": self.is_saved,
+            "is_applied": self.is_applied,
+            "tags": self.tags.split(",") if self.tags else [],
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

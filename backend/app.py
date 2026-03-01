@@ -11,8 +11,9 @@ from sqlalchemy import select, func, and_, extract
 from pathlib import Path
 
 from database import get_db, init_db
-from models import Task, JobApplication, DailyGoal
+from models import Task, JobApplication, DailyGoal, JobPosting
 from config import CORS_ORIGINS, TASK_CATEGORIES, APPLICATION_STATUSES
+from job_search_service import JobSearchService
 
 app = FastAPI(title="Job Search Daily Planner", version="1.0.0")
 
@@ -366,6 +367,113 @@ async def get_task_categories():
 async def get_application_statuses():
     """Get available application statuses."""
     return {"statuses": APPLICATION_STATUSES}
+
+
+# Job Search endpoints
+job_search_service = JobSearchService()
+
+
+@app.post("/api/job-search/search")
+async def search_jobs(
+    companies: Optional[List[str]] = None,
+    keywords: Optional[List[str]] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Search for job postings from target companies."""
+    results = await job_search_service.search_jobs(companies, keywords)
+
+    # Save found jobs to database
+    saved_count = 0
+    for job_data in results:
+        # Check if job already exists
+        existing_job = await db.execute(
+            select(JobPosting).where(
+                and_(
+                    JobPosting.company_name == job_data["company_name"],
+                    JobPosting.position_title == job_data["position_title"]
+                )
+            )
+        )
+        if not existing_job.scalar_one_or_none():
+            db_job = JobPosting(**job_data)
+            db.add(db_job)
+            saved_count += 1
+
+    await db.flush()
+
+    return {
+        "message": f"Found {len(results)} jobs, saved {saved_count} new postings",
+        "total_found": len(results),
+        "newly_saved": saved_count,
+        "jobs": results
+    }
+
+
+@app.get("/api/job-search/postings")
+async def get_job_postings(
+    company: Optional[str] = None,
+    is_saved: Optional[bool] = None,
+    is_applied: Optional[bool] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get saved job postings with optional filters."""
+    query = select(JobPosting)
+
+    if company:
+        query = query.where(JobPosting.company_name.contains(company))
+    if is_saved is not None:
+        query = query.where(JobPosting.is_saved == is_saved)
+    if is_applied is not None:
+        query = query.where(JobPosting.is_applied == is_applied)
+
+    query = query.order_by(JobPosting.created_at.desc())
+    result = await db.execute(query)
+    postings = result.scalars().all()
+    return [posting.to_dict() for posting in postings]
+
+
+@app.patch("/api/job-search/postings/{posting_id}")
+async def update_job_posting(
+    posting_id: int,
+    is_saved: Optional[bool] = None,
+    is_applied: Optional[bool] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update job posting (save/unsave, mark as applied)."""
+    result = await db.execute(select(JobPosting).where(JobPosting.id == posting_id))
+    posting = result.scalar_one_or_none()
+
+    if not posting:
+        raise HTTPException(status_code=404, detail="Job posting not found")
+
+    if is_saved is not None:
+        posting.is_saved = is_saved
+    if is_applied is not None:
+        posting.is_applied = is_applied
+
+    posting.updated_at = datetime.utcnow()
+    await db.flush()
+    await db.refresh(posting)
+    return posting.to_dict()
+
+
+@app.delete("/api/job-search/postings/{posting_id}")
+async def delete_job_posting(posting_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a job posting."""
+    result = await db.execute(select(JobPosting).where(JobPosting.id == posting_id))
+    posting = result.scalar_one_or_none()
+
+    if not posting:
+        raise HTTPException(status_code=404, detail="Job posting not found")
+
+    await db.delete(posting)
+    return {"message": "Job posting deleted successfully"}
+
+
+@app.get("/api/job-search/companies")
+async def get_target_companies():
+    """Get list of target companies for job search."""
+    return {"companies": job_search_service.list_target_companies()}
 
 
 # Serve frontend

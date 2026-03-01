@@ -20,6 +20,7 @@
         <!-- Navigation Tabs -->
         <nav class="tabs">
             <button class="tab-btn active" data-tab="daily-plan">Daily Plan</button>
+            <button class="tab-btn" data-tab="job-finder">Job Finder</button>
             <button class="tab-btn" data-tab="applications">Applications</button>
             <button class="tab-btn" data-tab="analytics">Analytics</button>
         </nav>
@@ -96,6 +97,49 @@
                         <input type="text" id="quickPosition" placeholder="Position title" required>
                         <input type="url" id="quickUrl" placeholder="Job posting URL (optional)">
                         <button id="quickAddAppBtn" class="btn-primary">Add Application</button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Job Finder Tab -->
+            <div id="job-finder" class="tab-content">
+                <section class="section">
+                    <h2>🔍 Find Product Roles at Top AI Companies</h2>
+                    <p class="section-description">Automatically search for Product Manager and Product Lead positions at OpenAI, Anthropic, and Google DeepMind.</p>
+
+                    <div class="search-controls">
+                        <div class="company-selector">
+                            <h3>Select Companies:</h3>
+                            <div class="checkbox-group">
+                                <label><input type="checkbox" name="company" value="openai" checked> OpenAI</label>
+                                <label><input type="checkbox" name="company" value="anthropic" checked> Anthropic</label>
+                                <label><input type="checkbox" name="company" value="google_deepmind" checked> Google DeepMind</label>
+                            </div>
+                        </div>
+
+                        <div class="keyword-input">
+                            <h3>Keywords:</h3>
+                            <input type="text" id="searchKeywords" value="product" placeholder="e.g., product, manager, lead">
+                        </div>
+
+                        <button id="searchJobsBtn" class="btn-primary">🔍 Search Jobs</button>
+                    </div>
+
+                    <div id="searchStatus" class="search-status" style="display: none;"></div>
+                </section>
+
+                <section class="section">
+                    <div class="section-header">
+                        <h2>Found Jobs</h2>
+                        <div class="filter-buttons">
+                            <button class="filter-btn active" data-filter="all">All</button>
+                            <button class="filter-btn" data-filter="saved">Saved</button>
+                            <button class="filter-btn" data-filter="applied">Applied</button>
+                        </div>
+                    </div>
+
+                    <div id="jobPostingsList" class="job-postings-list">
+                        <p class="empty-state">Click "Search Jobs" to find open positions at top AI companies!</p>
                     </div>
                 </section>
             </div>
